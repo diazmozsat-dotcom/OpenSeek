@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>OpenSeek</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&family=Space+Grotesk:wght=500;700&family=JetBrains+Mono:wght=400;500&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #121410;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 0;
+    }
+    .heading-font {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .search-input-box {
+      border: 2px solid #ea580c;
+      background-color: #1a1d17;
+    }
+    .search-action-btn {
+      background-color: #f97316;
+      color: #000000;
+    }
+    .search-action-btn:hover {
+      background-color: #ea580c;
+      color: #ffffff;
+    }
+    .suggestion-item:hover {
+      background-color: #262a22;
+      color: #f97316;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+  <!-- Header Section -->
+  <header class="w-full bg-[#121410]/90 backdrop-blur-md border-b border-stone-800/60 px-6 py-4 flex justify-between items-center fixed top-0 left-0 z-50">
+    <div class="flex items-center gap-3">
+      <!-- Back Arrow Button -->
+      <button id="backNavBtn" onclick="resetToHome()" class="hidden p-2 rounded-xl bg-[#1a1d17] border border-stone-800 text-stone-300 hover:text-white hover:border-orange-500 transition-all flex items-center justify-center">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 cursor-pointer" onclick="resetToHome()">
+        <div class="w-9 h-9 rounded-xl bg-orange-600 flex items-center justify-center text-black font-black text-lg tracking-tighter shadow-lg shadow-orange-500/20">
+          <i data-lucide="globe" class="w-5 h-5 text-black"></i>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Search Container -->
+  <main id="main-search-wrapper" class="flex-1 flex flex-col items-center justify-center pt-24 px-4 pb-16 max-w-3xl w-full mx-auto transition-all duration-500">
+    
+    <!-- Big Logo Area -->
+    <div id="big-logo-container" class="text-center mb-6 transition-all duration-500 transform origin-center">
+      <div class="flex items-center justify-center gap-3 mb-2">
+        <i data-lucide="globe" class="w-12 h-12 text-white"></i>
+        <h1 class="heading-font text-5xl md:text-7xl font-extrabold tracking-tighter text-white select-none">
+          OpenSeek <span class="text-stone-400 text-2xl md:text-4xl font-normal">.com</span>
+        </h1>
+      </div>
+      <p class="text-sm md:text-base text-stone-400 max-w-md mx-auto mt-3 font-normal leading-relaxed">
+        A small index of the surface web — added by people, approved by people, readable by machines.
+      </p>
+    </div>
+
+    <!-- Search Box -->
+    <div class="w-full flex flex-col relative max-w-2xl">
+      <div class="w-full search-input-box rounded-full p-1.5 transition-all duration-200 flex items-center relative z-20 shadow-2xl">
+        <input id="searchQueryInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search the index..." 
+               class="w-full bg-transparent text-white border-none outline-none py-2.5 px-6 font-medium text-base placeholder-stone-500" />
+        
+        <div class="flex items-center pr-1">
+          <button id="executeSearchBtn" onclick="triggerSearch()" class="search-action-btn text-sm font-bold active:scale-95 px-6 py-2.5 rounded-full transition-all shadow-md">
+            Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Suggestions Dropdown -->
+      <div id="suggestionsDropdown" class="absolute top-full left-0 w-full bg-[#1a1d17] border border-stone-800 rounded-2xl mt-2 overflow-hidden shadow-2xl hidden z-50 divide-y divide-stone-800/50">
+      </div>
+    </div>
+
+    <!-- Live Counter -->
+    <p id="indexCountText" class="text-xs font-mono text-stone-500 mt-6">Syncing index nodes...</p>
+
+    <!-- Results Display Section -->
+    <section id="searchResultsContainer" class="w-full mt-6 flex flex-col gap-4 hidden"></section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full border-t border-stone-900 bg-[#121410] py-4 px-6 text-center text-xs font-mono text-stone-500 flex justify-center">
+    <span>OpenSeek is a modified version of SURFFER search engine</span>
+  </footer>
+
+  <script>
+    let BLOGGER_DB = [];
+    const BLOG_URL = "https://simple-index.blogspot.com";
+    
+    const queryInput = document.getElementById('searchQueryInput');
+    const resultsContainer = document.getElementById('searchResultsContainer');
+    const bigLogoContainer = document.getElementById('big-logo-container');
+    const mainWrapper = document.getElementById('main-search-wrapper');
+    const suggestionsDropdown = document.getElementById('suggestionsDropdown');
+    const indexCountText = document.getElementById('indexCountText');
+    const backNavBtn = document.getElementById('backNavBtn');
+
+    function updateUiMetrics(totalCount) {
+      if (indexCountText) {
+        indexCountText.innerText = `${totalCount} sites in the index so far.`;
+      }
+    }
+
+    function extractPureUrl(payload) {
+      if (!payload) return "";
+      let div = document.createElement('div');
+      div.innerHTML = payload;
+      
+      let firstAnchor = div.querySelector('a');
+      if (firstAnchor && firstAnchor.href) {
+        let hrefVal = firstAnchor.getAttribute('href').trim();
+        if (hrefVal.startsWith('http') && !hrefVal.includes('blogger.com')) return hrefVal;
+      }
+
+      let rawText = div.textContent || div.innerText || payload;
+      rawText = rawText.trim();
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      const match = rawText.match(urlRegex);
+      return match && match[0] ? match[0].trim() : (rawText.startsWith('http') ? rawText.split(/[\s\n]/)[0] : 'https://' + rawText.split(/[\s\n]/)[0]);
+    }
+
+    function fetchAllBloggerPosts(startIndex = 1) {
+      const maxResults = 150;
+      const oldScript = document.getElementById('bloggerScriptTag');
+      if (oldScript) oldScript.remove();
+
+      const scriptNode = document.createElement('script');
+      scriptNode.id = 'bloggerScriptTag';
+      scriptNode.src = `${BLOG_URL}/feeds/posts/default?alt=json-in-script&callback=processBloggerData&max-results=${maxResults}&start-index=${startIndex}`;
+      
+      scriptNode.onerror = function() {
+        if(indexCountText) indexCountText.innerText = "Index sync finished or offline mode.";
+        checkUrlParameters();
+      };
+
+      document.body.appendChild(scriptNode);
+    }
+
+    window.processBloggerData = function(data) {
+      if (data && data.feed && data.feed.entry) {
+        const fetchedEntries = data.feed.entry.map((entry) => {
+          let rawContent = entry.content ? entry.content.$t : (entry.summary ? entry.summary.$t : "");
+          let targetDirectUrl = extractPureUrl(rawContent);
+          let cleanContent = rawContent.replace(/<[^>]*>?/gm, '').trim();
+          
+          return {
+            title: entry.title.$t,
+            directUrl: targetDirectUrl, 
+            displayUrl: targetDirectUrl.replace(/^(^\w+:|^)\/\//, '').split('/')[0],
+            snippet: cleanContent.length > 140 ? cleanContent.substring(0, 140) + "..." : cleanContent
+          };
+        });
+
+        BLOGGER_DB = BLOGGER_DB.concat(fetchedEntries);
+        updateUiMetrics(BLOGGER_DB.length);
+
+        const totalResults = parseInt(data.feed.openSearch$totalResults.$t, 10);
+        const nextIndex = BLOGGER_DB.length + 1;
+
+        if (nextIndex <= totalResults) {
+          fetchAllBloggerPosts(nextIndex);
+        } else {
+          checkUrlParameters();
+        }
+      } else {
+        updateUiMetrics(BLOGGER_DB.length);
+        checkUrlParameters();
+      }
+    };
+
+    function checkUrlParameters() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryParam = urlParams.get('q');
+      if (queryParam) {
+        queryInput.value = decodeURIComponent(queryParam);
+        triggerSearch();
+      }
+    }
+
+    async function renderCombinedSuggestions(query) {
+      suggestionsDropdown.innerHTML = '';
+      
+      if (!query) {
+        suggestionsDropdown.classList.add('hidden');
+        return;
+      }
+
+      const localMatches = BLOGGER_DB.filter(post => 
+        post.title.toLowerCase().includes(query) || post.displayUrl.toLowerCase().includes(query)
+      ).slice(0, 3);
+
+      let suggestionList = [];
+
+      localMatches.forEach(node => {
+        suggestionList.push({
+          title: node.title,
+          subText: node.displayUrl,
+          type: 'index'
+        });
+      });
+
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&origin=*&search=${encodeURIComponent(query)}&limit=3`;
+        const res = await fetch(wikiUrl);
+        const wikiData = await res.json();
+        
+        if (wikiData && wikiData[1]) {
+          wikiData[1].forEach((title) => {
+            if (!suggestionList.some(item => item.title.toLowerCase() === title.toLowerCase())) {
+              suggestionList.push({
+                title: title,
+                subText: 'Wikipedia Search',
+                type: 'wiki'
+              });
+            }
+          });
+        }
+      } catch (err) {}
+
+      if (suggestionList.length === 0) {
+        suggestionsDropdown.classList.add('hidden');
+        return;
+      }
+
+      suggestionList.forEach(item => {
+        const itemNode = document.createElement('div');
+        itemNode.className = "suggestion-item px-5 py-3 cursor-pointer text-stone-300 flex items-center justify-between transition-colors text-sm font-medium";
+        
+        const badgeColor = item.type === 'index' ? 'text-orange-400 bg-orange-500/10' : 'text-blue-400 bg-blue-500/10';
+        
+        itemNode.innerHTML = `
+          <div class="flex items-center gap-3 min-w-0">
+            <i data-lucide="${item.type === 'index' ? 'search' : 'book-open'}" class="w-4 h-4 text-stone-500 flex-shrink-0"></i> 
+            <span class="truncate text-white font-semibold">${item.title}</span>
+            <span class="truncate text-stone-500 text-xs opacity-80">(${item.subText})</span>
+          </div>
+          <span class="text-[10px] uppercase font-mono tracking-wider font-bold px-2 py-0.5 rounded border border-stone-800 ${badgeColor}">
+            ${item.type === 'index' ? 'Index' : 'Wiki'}
+          </span>
+        `;
+        
+        itemNode.addEventListener('click', () => {
+          queryInput.value = item.title;
+          suggestionsDropdown.classList.add('hidden');
+          triggerSearch();
+        });
+        
+        suggestionsDropdown.appendChild(itemNode);
+      });
+
+      if(window.lucide) lucide.createIcons();
+      suggestionsDropdown.classList.remove('hidden');
+    }
+
+    queryInput.addEventListener('keypress', (e) => { 
+      if (e.key === 'Enter') {
+        suggestionsDropdown.classList.add('hidden');
+        triggerSearch(); 
+      }
+    });
+
+    queryInput.addEventListener('input', () => {
+      const val = queryInput.value.trim().toLowerCase();
+      if (!val) {
+        resetToHome();
+        return;
+      }
+      renderCombinedSuggestions(val);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#searchQueryInput') && !e.target.closest('#suggestionsDropdown')) {
+        suggestionsDropdown.classList.add('hidden');
+      }
+    });
+
+    function triggerSearch() {
+      const queryStr = queryInput.value.trim();
+      if (!queryStr) { resetToHome(); return; }
+
+      suggestionsDropdown.classList.add('hidden');
+      bigLogoContainer.classList.add('scale-75', '-translate-y-4', 'opacity-0', 'h-0', 'mb-0', 'overflow-hidden');
+      mainWrapper.classList.remove('justify-center');
+      mainWrapper.classList.add('pt-24');
+
+      backNavBtn.classList.remove('hidden');
+
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?q=' + encodeURIComponent(queryStr);
+      window.history.pushState({path:newUrl}, '', newUrl);
+
+      const matches = BLOGGER_DB.filter(post => 
+        post.title.toLowerCase().includes(queryStr.toLowerCase()) || 
+        post.snippet.toLowerCase().includes(queryStr.toLowerCase()) ||
+        post.displayUrl.toLowerCase().includes(queryStr.toLowerCase())
+      );
+      renderResults(matches, queryStr);
+    }
+
+    async function renderResults(results, rawQuery) {
+      resultsContainer.innerHTML = '';
+      resultsContainer.classList.remove('hidden');
+
+      let combinedItemsHtml = '';
+
+      // 1. Simple-Index (Blogger DB) Results
+      if (results.length > 0) {
+        results.forEach(node => {
+          combinedItemsHtml += `
+            <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-orange-500/50 transition-all duration-200">
+              <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+                <span class="text-orange-400 font-bold tracking-wider text-[10px] uppercase bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">Human Curated</span>
+                <span class="truncate opacity-80">${node.displayUrl}</span>
+              </div>
+              
+              <a href="${node.directUrl}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-orange-400 group-hover:text-orange-300 transition-colors inline-block outline-none">
+                ${node.title}
+              </a>
+              
+              <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+                ${node.snippet || 'Verified node indexed from database.'}
+              </p>
+            </div>
+          `;
+        });
+      }
+
+      // 2. Wikipedia Results with Image API Fetching
+      try {
+        const wikiApiUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gtegeneratorsearch=${encodeURIComponent(rawQuery)}&gsrsearch=${encodeURIComponent(rawQuery)}&gsrlimit=3&prop=extracts|pageimages&exintro=1&explaintext=1&exsentences=2&piprop=thumbnail&pithumbsize=300&utf8=&format=json&origin=*`;
+        const wikiRes = await fetch(wikiApiUrl);
+        const wikiJson = await wikiRes.json();
+
+        if (wikiJson.query && wikiJson.query.pages) {
+          const pages = Object.values(wikiJson.query.pages);
+          pages.forEach(wItem => {
+            const cleanSnippet = wItem.extract || '';
+            const wikiPageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(wItem.title.replace(/ /g, '_'))}`;
+            const imgUrl = wItem.thumbnail ? wItem.thumbnail.source : null;
+
+            combinedItemsHtml += `
+              <div class="group flex flex-col md:flex-row gap-4 text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-blue-500/50 transition-all duration-200">
+                ${imgUrl ? `
+                  <div class="w-full md:w-32 h-32 flex-shrink-0 rounded-xl overflow-hidden bg-stone-900 border border-stone-800">
+                    <img src="${imgUrl}" alt="${wItem.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                ` : ''}
+                
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+                    <span class="text-blue-400 font-bold tracking-wider text-[10px] uppercase bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">Wikipedia Article</span>
+                    <span class="truncate opacity-80">en.wikipedia.org</span>
+                  </div>
+                  
+                  <a href="${wikiPageUrl}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-blue-400 group-hover:text-blue-300 transition-colors inline-block outline-none">
+                    ${wItem.title}
+                  </a>
+                  
+                  <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+                    ${cleanSnippet}
+                  </p>
+                </div>
+              </div>
+            `;
+          });
+        }
+      } catch (err) {}
+
+      // 3. Query Parameter Search Cards
+      const encodedQuery = encodeURIComponent(rawQuery);
+
+      // YouTube Card
+      combinedItemsHtml += `
+        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-500/50 transition-all duration-200">
+          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+            <span class="text-red-500 font-bold tracking-wider text-[10px] uppercase bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">YouTube Search</span>
+            <span class="truncate opacity-80">youtube.com</span>
+          </div>
+          
+          <a href="https://www.youtube.com/results?search_query=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-500 group-hover:text-red-400 transition-colors inline-block outline-none">
+            Watch videos about "${rawQuery}" on YouTube
+          </a>
+          
+          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+            Click here to explore video tutorials, discussions, and content related to "${rawQuery}" on YouTube.
+          </p>
+        </div>
+      `;
+
+      // Quora Card
+      combinedItemsHtml += `
+        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-600/50 transition-all duration-200">
+          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+            <span class="text-red-600 font-bold tracking-wider text-[10px] uppercase bg-red-600/10 px-2 py-0.5 rounded border border-red-600/20">Quora Q&A</span>
+            <span class="truncate opacity-80">quora.com</span>
+          </div>
+          
+          <a href="https://www.quora.com/search?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-600 group-hover:text-red-500 transition-colors inline-block outline-none">
+            Read discussions about "${rawQuery}" on Quora
+          </a>
+          
+          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+            Discover community answers, opinions, and expert insights regarding "${rawQuery}" on Quora.
+          </p>
+        </div>
+      `;
+
+      // Pinterest Card
+      combinedItemsHtml += `
+        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-rose-500/50 transition-all duration-200">
+          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+            <span class="text-rose-500 font-bold tracking-wider text-[10px] uppercase bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">Pinterest Visuals</span>
+            <span class="truncate opacity-80">pinterest.com</span>
+          </div>
+          
+          <a href="https://www.pinterest.com/search/pins/?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-rose-500 group-hover:text-rose-400 transition-colors inline-block outline-none">
+            Explore images & pins for "${rawQuery}" on Pinterest
+          </a>
+          
+          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+            Browse visual ideas, infographics, and inspiration related to "${rawQuery}" on Pinterest.
+          </p>
+        </div>
+      `;
+
+      resultsContainer.innerHTML = combinedItemsHtml;
+
+      if(window.lucide) lucide.createIcons();
+    }
+
+    function resetToHome() {
+      queryInput.value = '';
+      suggestionsDropdown.classList.add('hidden');
+      resultsContainer.classList.add('hidden');
+      backNavBtn.classList.add('hidden');
+      
+      bigLogoContainer.classList.remove('scale-75', '-translate-y-4', 'opacity-0', 'h-0', 'mb-0', 'overflow-hidden');
+      mainWrapper.classList.add('justify-center');
+      mainWrapper.classList.remove('pt-24');
+      
+      const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+      window.history.pushState({path:cleanUrl}, '', cleanUrl);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchAllBloggerPosts(1);
+      if(window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
