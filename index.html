@@ -7,9 +7,11 @@
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PeerJS Library Added -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&family=Space+Grotesk:wght=500;700&family=JetBrains+Mono:wght=400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap');
     
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
@@ -72,14 +74,14 @@
         </h1>
       </div>
       <p class="text-sm md:text-base text-stone-400 max-w-md mx-auto mt-3 font-normal leading-relaxed">
-        One search index across the — Surface Web, Tor, Gemini, IPFS, and Gopher
+        One search index across the — Surface Web, PeerJS P2P, Tor, Gemini,I2P,Gopher and IPFS
       </p>
     </div>
 
     <!-- Search Box -->
     <div class="w-full flex flex-col relative max-w-2xl">
       <div class="w-full search-input-box rounded-full p-1.5 transition-all duration-200 flex items-center relative z-20 shadow-2xl">
-        <input id="searchQueryInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search the index..." 
+        <input id="searchQueryInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search index or PeerJS site name..." 
                class="w-full bg-transparent text-white border-none outline-none py-2.5 px-6 font-medium text-base placeholder-stone-500" />
         
         <div class="flex items-center pr-1">
@@ -101,6 +103,34 @@
     <section id="searchResultsContainer" class="w-full mt-6 flex flex-col gap-4 hidden"></section>
   </main>
 
+  <!-- IN-APP PEERJS WEBSITE VIEWER OVERLAY -->
+  <div id="peerSiteViewer" class="fixed inset-0 z-[100] bg-[#121410] hidden flex-col">
+    <!-- Browser Top Bar inside OpenSeek -->
+    <div class="h-14 bg-[#1a1d17] border-b border-stone-800 px-4 flex items-center justify-between">
+      <div class="flex items-center gap-3 min-w-0">
+        <button onclick="closePeerSite()" class="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-white flex items-center gap-1 text-xs font-bold">
+          <i data-lucide="x" class="w-4 h-4"></i> Close
+        </button>
+        <div class="flex items-center gap-2 bg-[#121410] border border-stone-800 px-3 py-1.5 rounded-lg text-xs font-mono text-emerald-400 truncate">
+          <i data-lucide="radio" class="w-3.5 h-3.5 animate-pulse"></i>
+          <span id="viewerUrlBar">openseek://loading...</span>
+        </div>
+      </div>
+      <span class="text-[10px] font-mono uppercase px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden sm:inline">
+        P2P
+      </span>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="viewerLoading" class="flex-1 flex flex-col items-center justify-center text-center p-6">
+      <div class="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <p class="text-sm font-mono text-stone-300" id="viewerStatusText">Connecting to Peer host...</p>
+    </div>
+
+    <!-- Sandboxed Website Iframe -->
+    <iframe id="peerSiteFrame" class="w-full flex-1 bg-white border-none hidden" sandbox="allow-scripts allow-forms allow-modals"></iframe>
+  </div>
+
   <!-- Footer -->
   <footer class="w-full border-t border-stone-900 bg-[#121410] py-4 px-6 text-center text-xs font-mono text-stone-500 flex justify-center">
     <span>OpenSeek is a modified version of SURFFER search engine</span>
@@ -109,6 +139,7 @@
   <script>
     let BLOGGER_DB = [];
     const BLOG_URL = "https://simple-index.blogspot.com";
+    let clientPeer = null;
     
     const queryInput = document.getElementById('searchQueryInput');
     const resultsContainer = document.getElementById('searchResultsContainer');
@@ -118,9 +149,13 @@
     const indexCountText = document.getElementById('indexCountText');
     const backNavBtn = document.getElementById('backNavBtn');
 
+    function initClientPeer() {
+      clientPeer = new Peer();
+    }
+
     function updateUiMetrics(totalCount) {
       if (indexCountText) {
-        indexCountText.innerText = `${totalCount} sites in the index so far.`;
+        indexCountText.innerText = `${totalCount} sites in the index + PeerJS P2P enabled.`;
       }
     }
 
@@ -152,7 +187,7 @@
       scriptNode.src = `${BLOG_URL}/feeds/posts/default?alt=json-in-script&callback=processBloggerData&max-results=${maxResults}&start-index=${startIndex}`;
       
       scriptNode.onerror = function() {
-        if(indexCountText) indexCountText.innerText = "Index sync finished or offline mode.";
+        if(indexCountText) indexCountText.innerText = "Index sync finished (PeerJS Ready).";
         checkUrlParameters();
       };
 
@@ -208,11 +243,20 @@
         return;
       }
 
+      let suggestionList = [];
+
+      const cleanPeerName = query.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (cleanPeerName) {
+        suggestionList.push({
+          title: cleanPeerName,
+          subText: `openseek://${cleanPeerName}`,
+          type: 'peer'
+        });
+      }
+
       const localMatches = BLOGGER_DB.filter(post => 
         post.title.toLowerCase().includes(query) || post.displayUrl.toLowerCase().includes(query)
       ).slice(0, 3);
-
-      let suggestionList = [];
 
       localMatches.forEach(node => {
         suggestionList.push({
@@ -249,23 +293,39 @@
         const itemNode = document.createElement('div');
         itemNode.className = "suggestion-item px-5 py-3 cursor-pointer text-stone-300 flex items-center justify-between transition-colors text-sm font-medium";
         
-        const badgeColor = item.type === 'index' ? 'text-orange-400 bg-orange-500/10' : 'text-blue-400 bg-blue-500/10';
+        let badgeColor = 'text-blue-400 bg-blue-500/10';
+        let iconName = 'book-open';
+        let labelText = 'Wiki';
+
+        if (item.type === 'index') {
+          badgeColor = 'text-orange-400 bg-orange-500/10';
+          iconName = 'search';
+          labelText = 'Index';
+        } else if (item.type === 'peer') {
+          badgeColor = 'text-emerald-400 bg-emerald-500/10';
+          iconName = 'radio';
+          labelText = 'P2P';
+        }
         
         itemNode.innerHTML = `
           <div class="flex items-center gap-3 min-w-0">
-            <i data-lucide="${item.type === 'index' ? 'search' : 'book-open'}" class="w-4 h-4 text-stone-500 flex-shrink-0"></i> 
+            <i data-lucide="${iconName}" class="w-4 h-4 text-stone-500 flex-shrink-0"></i> 
             <span class="truncate text-white font-semibold">${item.title}</span>
             <span class="truncate text-stone-500 text-xs opacity-80">(${item.subText})</span>
           </div>
           <span class="text-[10px] uppercase font-mono tracking-wider font-bold px-2 py-0.5 rounded border border-stone-800 ${badgeColor}">
-            ${item.type === 'index' ? 'Index' : 'Wiki'}
+            ${labelText}
           </span>
         `;
         
         itemNode.addEventListener('click', () => {
           queryInput.value = item.title;
           suggestionsDropdown.classList.add('hidden');
-          triggerSearch();
+          if (item.type === 'peer') {
+            openPeerSite(item.title);
+          } else {
+            triggerSearch();
+          }
         });
         
         suggestionsDropdown.appendChild(itemNode);
@@ -325,7 +385,31 @@
 
       let combinedItemsHtml = '';
 
-      // 1. Simple-Index (Blogger DB) Results
+      const cleanPeerName = rawQuery.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (cleanPeerName) {
+        combinedItemsHtml += `
+          <div onclick="openPeerSite('${cleanPeerName}')" class="cursor-pointer group flex flex-col text-left bg-[#1a1d17] hover:bg-[#22261e] p-5 rounded-2xl border-2 border-emerald-500/40 hover:border-emerald-400 transition-all duration-200 shadow-lg shadow-emerald-950/20">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2 text-stone-400 font-mono text-xs truncate">
+                <span class="text-emerald-400 font-bold tracking-wider text-[10px] uppercase bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> P2P Node
+                </span>
+                <span class="truncate opacity-80">openseek://${cleanPeerName}</span>
+              </div>
+              <span class="text-xs font-mono text-emerald-400 group-hover:translate-x-1 transition-transform">Launch In-App →</span>
+            </div>
+            
+            <h3 class="heading-font font-bold tracking-wide text-xl text-emerald-400 group-hover:text-emerald-300 transition-colors">
+              ${cleanPeerName} — OpenSeek Hosted Website
+            </h3>
+            
+            <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+              Click this card to load "${cleanPeerName}" directly inside OpenSeek via PeerJS.
+            </p>
+          </div>
+        `;
+      }
+
       if (results.length > 0) {
         results.forEach(node => {
           combinedItemsHtml += `
@@ -347,7 +431,6 @@
         });
       }
 
-      // 2. Wikipedia Results with Image API Fetching
       try {
         const wikiApiUrl = `https://en.wikipedia.org/w/api.php?action=query&generator=search&gtegeneratorsearch=${encodeURIComponent(rawQuery)}&gsrsearch=${encodeURIComponent(rawQuery)}&gsrlimit=3&prop=extracts|pageimages&exintro=1&explaintext=1&exsentences=2&piprop=thumbnail&pithumbsize=300&utf8=&format=json&origin=*`;
         const wikiRes = await fetch(wikiApiUrl);
@@ -388,66 +471,85 @@
         }
       } catch (err) {}
 
-      // 3. Query Parameter Search Cards
       const encodedQuery = encodeURIComponent(rawQuery);
 
-      // YouTube Card
       combinedItemsHtml += `
         <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-500/50 transition-all duration-200">
           <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
             <span class="text-red-500 font-bold tracking-wider text-[10px] uppercase bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">YouTube Search</span>
             <span class="truncate opacity-80">youtube.com</span>
           </div>
-          
           <a href="https://www.youtube.com/results?search_query=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-500 group-hover:text-red-400 transition-colors inline-block outline-none">
             Watch videos about "${rawQuery}" on YouTube
           </a>
-          
           <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
             Click here to explore video tutorials, discussions, and content related to "${rawQuery}" on YouTube.
           </p>
         </div>
       `;
 
-      // Quora Card
-      combinedItemsHtml += `
-        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-600/50 transition-all duration-200">
-          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
-            <span class="text-red-600 font-bold tracking-wider text-[10px] uppercase bg-red-600/10 px-2 py-0.5 rounded border border-red-600/20">Quora Q&A</span>
-            <span class="truncate opacity-80">quora.com</span>
-          </div>
-          
-          <a href="https://www.quora.com/search?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-600 group-hover:text-red-500 transition-colors inline-block outline-none">
-            Read discussions about "${rawQuery}" on Quora
-          </a>
-          
-          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
-            Discover community answers, opinions, and expert insights regarding "${rawQuery}" on Quora.
-          </p>
-        </div>
-      `;
-
-      // Pinterest Card
-      combinedItemsHtml += `
-        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-rose-500/50 transition-all duration-200">
-          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
-            <span class="text-rose-500 font-bold tracking-wider text-[10px] uppercase bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">Pinterest Visuals</span>
-            <span class="truncate opacity-80">pinterest.com</span>
-          </div>
-          
-          <a href="https://www.pinterest.com/search/pins/?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-rose-500 group-hover:text-rose-400 transition-colors inline-block outline-none">
-            Explore images & pins for "${rawQuery}" on Pinterest
-          </a>
-          
-          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
-            Browse visual ideas, infographics, and inspiration related to "${rawQuery}" on Pinterest.
-          </p>
-        </div>
-      `;
-
       resultsContainer.innerHTML = combinedItemsHtml;
+      if(window.lucide) lucide.createIcons();
+    }
+
+    function openPeerSite(siteName) {
+      const viewer = document.getElementById('peerSiteViewer');
+      const urlBar = document.getElementById('viewerUrlBar');
+      const loading = document.getElementById('viewerLoading');
+      const statusText = document.getElementById('viewerStatusText');
+      const frame = document.getElementById('peerSiteFrame');
+
+      viewer.classList.remove('hidden');
+      viewer.classList.add('flex');
+      loading.classList.remove('hidden');
+      frame.classList.add('hidden');
+      urlBar.innerText = `openseek://${siteName}`;
+      statusText.innerText = `Connecting to "${siteName}" via P2P...`;
+
+      if (!clientPeer || clientPeer.destroyed) {
+        clientPeer = new Peer();
+      }
+
+      const targetPeerId = "openseek-site-" + siteName;
+      let connectionResolved = false;
+
+      const timeoutTimer = setTimeout(() => {
+        if (!connectionResolved) {
+          statusText.innerHTML = `<span class="text-red-400">Error: Website "${siteName}" is offline or does not exist.</span><br><span class="text-xs text-stone-500 mt-2 block">Make sure the publisher page is active and hosting this site.</span>`;
+        }
+      }, 7000);
+
+      const conn = clientPeer.connect(targetPeerId);
+
+      conn.on('open', () => {
+        statusText.innerText = "Connected! Downloading website HTML...";
+      });
+
+      conn.on('data', (data) => {
+        if (data && data.type === 'SITE_PAYLOAD') {
+          connectionResolved = true;
+          clearTimeout(timeoutTimer);
+
+          loading.classList.add('hidden');
+          frame.classList.remove('hidden');
+          frame.srcdoc = data.html;
+        }
+      });
+
+      conn.on('error', () => {
+        clearTimeout(timeoutTimer);
+        statusText.innerHTML = `<span class="text-red-400">Connection failed. Host unreachable.</span>`;
+      });
 
       if(window.lucide) lucide.createIcons();
+    }
+
+    function closePeerSite() {
+      const viewer = document.getElementById('peerSiteViewer');
+      const frame = document.getElementById('peerSiteFrame');
+      viewer.classList.add('hidden');
+      viewer.classList.remove('flex');
+      frame.srcdoc = "";
     }
 
     function resetToHome() {
@@ -465,6 +567,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      initClientPeer();
       fetchAllBloggerPosts(1);
       if(window.lucide) lucide.createIcons();
     });
