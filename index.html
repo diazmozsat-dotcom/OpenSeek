@@ -74,7 +74,7 @@
         </h1>
       </div>
       <p class="text-sm md:text-base text-stone-400 max-w-md mx-auto mt-3 font-normal leading-relaxed">
-        One search index across the — Surface Web, PeerJS P2P, Tor, Gemini,I2P,Gopher and IPFS
+        One search index across the — Surface Web, OpenSeek-P2P,Gopher,I2P, Tor, Gemini, and IPFS
       </p>
     </div>
 
@@ -473,17 +473,56 @@
 
       const encodedQuery = encodeURIComponent(rawQuery);
 
+      // YouTube Card
       combinedItemsHtml += `
         <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-500/50 transition-all duration-200">
           <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
             <span class="text-red-500 font-bold tracking-wider text-[10px] uppercase bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">YouTube Search</span>
             <span class="truncate opacity-80">youtube.com</span>
           </div>
+          
           <a href="https://www.youtube.com/results?search_query=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-500 group-hover:text-red-400 transition-colors inline-block outline-none">
             Watch videos about "${rawQuery}" on YouTube
           </a>
+          
           <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
             Click here to explore video tutorials, discussions, and content related to "${rawQuery}" on YouTube.
+          </p>
+        </div>
+      `;
+
+      // Quora Card
+      combinedItemsHtml += `
+        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-red-600/50 transition-all duration-200">
+          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+            <span class="text-red-600 font-bold tracking-wider text-[10px] uppercase bg-red-600/10 px-2 py-0.5 rounded border border-red-600/20">Quora Q&A</span>
+            <span class="truncate opacity-80">quora.com</span>
+          </div>
+          
+          <a href="https://www.quora.com/search?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-red-600 group-hover:text-red-500 transition-colors inline-block outline-none">
+            Read discussions about "${rawQuery}" on Quora
+          </a>
+          
+          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+            Discover community answers, opinions, and expert insights regarding "${rawQuery}" on Quora.
+          </p>
+        </div>
+      `;
+
+      // Pinterest Card
+      combinedItemsHtml += `
+        <div class="group flex flex-col text-left bg-[#1a1d17]/80 hover:bg-[#1a1d17] p-5 rounded-2xl border border-stone-800/80 hover:border-rose-500/50 transition-all duration-200">
+          <div class="flex items-center gap-2 text-stone-400 mb-1.5 font-mono text-xs truncate">
+            <span class="text-rose-500 font-bold tracking-wider text-[10px] uppercase bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">Pinterest Visuals</span>
+            <span class="truncate opacity-80">pinterest.com</span>
+          </div>
+          
+          <a href="https://www.pinterest.com/search/pins/?q=${encodedQuery}" target="_blank" rel="noopener noreferrer" class="heading-font font-bold tracking-wide text-xl text-rose-500 group-hover:text-rose-400 transition-colors inline-block outline-none">
+            Explore images & pins for "${rawQuery}" on Pinterest
+          </a>
+          
+          <p class="text-sm text-stone-300 font-normal mt-2 leading-relaxed">
+            Browse visual ideas, infographics, and inspiration related to "${rawQuery}" on Pinterest.
           </p>
         </div>
       `;
